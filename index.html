@@ -12,7 +12,7 @@
 <style>
   :root{
     --bg:#120f16; --panel:#1b1721; --panel2:#231e2b; --line:#332c3d;
-    --txt:#efe9f3; --dim:#a596b3; --acc:#ff7eb6; --ok:#3ddc97; --warn:#ffb95e;
+    --txt:#efe9f3; --dim:#a596b3; --acc:#5fd37c; --ok:#3ddc97; --warn:#ffb95e;
     --plan:#b98cff; --drop:#ff8a4c; --epic:#ffd84d; --r:14px;
   }
   :root{color-scheme:dark}
@@ -42,7 +42,7 @@
   #q{flex:1 1 170px}
   .btn{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:8px 12px; cursor:pointer; white-space:nowrap}
   .btn:hover{background:#2e2738}
-  .btn.p{background:var(--acc); border-color:var(--acc); color:#2a0a1a; font-weight:600}
+  .btn.p{background:var(--acc); border-color:var(--acc); color:#07210f; font-weight:600}
   .btn.p:hover{filter:brightness(1.08)}
   .btn.sm{padding:4px 9px; font-size:12.5px; border-radius:8px}
   .btn.gh{background:transparent}
@@ -183,7 +183,7 @@
   .play{width:24px; height:24px; border-radius:50%; border:1px solid var(--line); background:transparent;
         color:var(--dim); font-size:10px; line-height:1; cursor:pointer; flex:none; padding:0}
   .play:hover{border-color:var(--acc); color:var(--acc)}
-  .play.on{background:var(--acc); border-color:var(--acc); color:#2a0a1a}
+  .play.on{background:var(--acc); border-color:var(--acc); color:#07210f}
   .play:disabled{opacity:.25; cursor:default}
   .disc{color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.4px; padding:6px 3px 2px}
   .nostruct{color:var(--dim); font-size:12.3px; padding:4px 2px}
@@ -216,8 +216,9 @@
   .ri .s{color:var(--dim); font-size:12px}
   .src{font-size:10px; padding:1px 6px; border-radius:99px; margin-left:6px;
        border:1px solid currentColor; vertical-align:1px; font-weight:600; letter-spacing:.3px}
-  .src.itunes{color:#f28ab8}
+  .src.itunes{color:#8fd6a0}
   .src.mb{color:#c9a7ff}
+  .src.deezer{color:#f0b36a}
   .hint{color:var(--dim); font-size:12.3px; margin-top:8px}
   .toast{position:fixed; left:50%; bottom:20px; transform:translate(-50%,14px); opacity:0;
     background:#efe9f3; color:#161119; padding:9px 15px; border-radius:99px; font-size:13.5px;
@@ -278,7 +279,7 @@
       <div><b>Trenta secondi per ricordare</b>
         Accanto a ogni brano un ▶ con l'anteprima, per capire al volo di quale canzone si tratta.</div>
       <div><b>I dati arrivano da soli</b>
-        Cerchi artista e titolo e scaletta e copertina arrivano da Apple Music o da MusicBrainz.
+        Cerchi artista e titolo e scaletta e copertina arrivano da Apple Music, Deezer o MusicBrainz.
         Stesso account di tvlog, su tutti i tuoi dispositivi.</div>
     </div>
     <div class="bact">
@@ -313,11 +314,12 @@
 <footer style="padding:4px 14px 70px; color:#7d6f8a; font-size:11.5px; line-height:1.6">
   Copertine, scalette e anteprime da
   <a href="https://music.apple.com/it/" target="_blank" rel="noopener" style="color:#7d6f8a">Apple Music</a>
-  tramite l'iTunes Search API (Apple non è coinvolta in questo sito) e da
+  tramite l'iTunes Search API (Apple non è coinvolta in questo sito), da
+  <a href="https://www.deezer.com/" target="_blank" rel="noopener" style="color:#7d6f8a">Deezer</a> e da
   <a href="https://musicbrainz.org/" target="_blank" rel="noopener" style="color:#7d6f8a">MusicBrainz</a> /
   <a href="https://coverartarchive.org/" target="_blank" rel="noopener" style="color:#7d6f8a">Cover Art Archive</a>.<br>
   Segnalazioni e suggerimenti: <span class="posta"></span>
-  · <span title="Serve a capire se un dispositivo sta usando una versione vecchia">versione del 6 novembre 2026</span>
+  · <span title="Serve a capire se un dispositivo sta usando una versione vecchia">versione del 6 novembre 2026 · c</span>
 </footer>
 
 <div class="ov" id="ovAdd">
@@ -326,7 +328,9 @@
     <div class="rowf">
       <input id="sq" class="fld" placeholder="Artista e titolo, i risultati arrivano da soli…" autocomplete="off">
       <select id="prov" class="fld" style="flex:none; max-width:170px" title="Fonte da interrogare">
+        <option value="tutte">Tutte le fonti</option>
         <option value="itunes">Apple Music</option>
+        <option value="deezer">Deezer</option>
         <option value="mb">MusicBrainz</option>
       </select>
     </div>
@@ -399,7 +403,7 @@
 (function(){
 "use strict";
 var KEY="musiclog-v1", CFG="musiclog-cfg";
-var db={shows:[]}, cfg={prov:"itunes"};
+var db={shows:[]}, cfg={prov:"tutte"};
 
 function loadCfg(){ try{ var s=JSON.parse(localStorage.getItem(CFG)||"null")||{}; if(s.prov) cfg.prov=s.prov }catch(e){} }
 function saveCfg(){ try{ localStorage.setItem(CFG,JSON.stringify(cfg)) }catch(e){} }
@@ -463,7 +467,7 @@ function votati(s){ return Object.keys(s.tr||{}).filter(function(k){ return s.tr
 function migrate(s){
   var o={ id:s.id||uid(), artist:String(s.artist||""), title:String(s.title||"senza titolo"), year:s.year||"",
     cover:s.cover||"", url:s.url||"", genre:s.genre||"",
-    src:(s.src&&s.src.id&&(s.src.p==="itunes"||s.src.p==="mb"))?{p:s.src.p,id:s.src.id}:null,
+    src:(s.src&&s.src.id&&(s.src.p==="itunes"||s.src.p==="mb"||s.src.p==="deezer"))?{p:s.src.p,id:s.src.id,st:s.src.st||"it"}:null,
     tracks:Array.isArray(s.tracks)?s.tracks.map(function(t,i){
       return {n:Number(t.n)||i+1, disc:Number(t.disc)||1, name:String(t.name||""), ms:Number(t.ms)||0, prev:t.prev||""} }):[],
     tr:(s.tr&&typeof s.tr==="object")?s.tr:{},
@@ -586,7 +590,7 @@ document.getElementById("bMenu").onclick=function(){ document.querySelector(".to
 })();
 
 function webUrl(s){
-  if(s.url) return { href:s.url, tip:s.src&&s.src.p==="mb"?"Apri la scheda su MusicBrainz":"Apri su Apple Music" };
+  if(s.url) return { href:s.url, tip:s.src&&s.src.p==="mb"?"Apri la scheda su MusicBrainz":s.src&&s.src.p==="deezer"?"Apri su Deezer":"Apri su Apple Music" };
   if(s.src && s.src.p==="mb") return { href:"https://musicbrainz.org/release-group/"+s.src.id, tip:"Apri la scheda su MusicBrainz" };
   return null;
 }
@@ -627,7 +631,7 @@ function detailHtml(s){
     '<textarea class="fld" rows="4" data-f="tracks" data-i="'+s.id+'">'+esc(s.tracks.map(function(t){ return t.name }).join("\n"))+'</textarea>'+
     '<label>Nota</label><textarea class="fld" rows="2" data-f="note" data-i="'+s.id+'" placeholder="Dove l\'hai scoperto, cosa ti ricorda…">'+esc(s.note||"")+'</textarea>'+
     '<div class="fin">Aggiunto il '+new Date(s.added).toLocaleDateString("it-IT")+
-    (s.src?' · fonte '+(s.src.p==="mb"?"MusicBrainz":"Apple Music"):' · inserito a mano')+
+    (s.src?' · fonte '+nomeFonte(s.src.p):' · inserito a mano')+
     (w?' · <a href="'+esc(w.href)+'" target="_blank" rel="noopener" style="color:var(--acc)">scheda</a>':'')+'</div>'+
     '</div>';
 }
@@ -758,25 +762,64 @@ function getJSON(url,opt){
   return fetch(url,opt).then(function(r){ if(!r.ok) throw new Error("http "+r.status); return r.json() });
 }
 /* -- Apple Music / iTunes: senza chiave, negozio italiano -- */
-function itSearch(q){
-  return getJSON("https://itunes.apple.com/search?term="+encodeURIComponent(q)+"&entity=album&country=it&limit=20")
+/* Il negozio italiano non ha tutto (metà dei Metallica, per dire): si
+   interrogano insieme quello italiano e quello americano, si tolgono i
+   doppioni e si riordina per pertinenza, perché l'ordine di Apple premia
+   i singoli e le cover rispetto all'album che stai cercando.            */
+function norm(s){ return String(s||"").toLowerCase().replace(/[’']/g,"").replace(/[^a-z0-9àèéìòù]+/g," ").trim() }
+function pertinenza(q,a){
+  var tok=norm(q).split(" ").filter(function(w){ return w.length>1 }), hay=norm(a.artist+" "+a.title), p=0;
+  tok.forEach(function(w){ if(hay.indexOf(w)>-1) p+=10/tok.length });
+  if(norm(a.title).indexOf(norm(q))>-1 || (norm(a.artist)+" "+norm(a.title)).indexOf(norm(q))>-1) p+=3;
+  var art=norm(a.artist), nq=norm(q);
+  // hai scritto proprio quell'artista (e non solo: "kind of blue" non premia un gruppo che si chiama così)
+  if(art && nq.indexOf(art)>-1 && nq.replace(art,"").trim()) p+=3;
+  if(/\b(violin|piano|orchestra|quartet|symphon\w*|strings|guitar|lofi|lo-fi|chill|sleep|baby|kids|bambini)\b|8.bit/i.test(a.title) && !/\b(piano|guitar|orchestra)\b/.test(nq)) p-=4;
+  if(a.n!=null && a.n<5) p-=4;                                          // singoli ed EP minuscoli
+  if(/\b(single|ep|covers?|covered|instrumental|karaoke|tribute|lullab\w*|reimagined|soundfont)\b|in the style|plays |performs|made famous|originally performed|for babies|string quartet/i.test(a.title)) p-=6;
+  if(/various|artisti vari|karaoke|tribute|orchestra plays/i.test(a.artist)) p-=4;
+  if(/\blive\b|remix/i.test(a.title)) p-=1;
+  if(a.tipo && /live|compilation|remix|soundtrack|demo/i.test(a.tipo)) p-=2;
+  if(a.p==="deezer" && a.rank!=null) p+=Math.max(0,3-a.rank)+(a.rank<10?.5:0);   // Deezer ordina per popolarità: fidarsi
+  return p;
+}
+/* stesso disco in edizioni diverse = un solo risultato: via le parole da ristampa */
+function chiave(a){
+  return norm(a.artist)+"|"+norm(a.title).replace(/\b(remaster(ed)?|expanded|deluxe|super|bonus|edition|anniversary|version|digital|mix|\d{4})\b/g," ").replace(/\s+/g," ").trim();
+}
+function ordinaPertinenza(q,lista){
+  lista.forEach(function(a,i){ a._p=pertinenza(q,a); a._i=i });
+  return lista.sort(function(a,b){ return b._p-a._p || a._i-b._i });
+}
+function itStore(q,st){
+  return getJSON("https://itunes.apple.com/search?term="+encodeURIComponent(q)+"&entity=album&country="+st+"&limit=25")
     .then(function(j){
       return (j.results||[]).map(function(a){
-        return { p:"itunes", id:a.collectionId, artist:a.artistName, title:a.collectionName,
+        return { p:"itunes", id:a.collectionId, st:st, artist:a.artistName, title:a.collectionName,
                  year:(a.releaseDate||"").slice(0,4), cover:(a.artworkUrl100||"").replace("100x100bb","600x600bb"),
                  thumb:a.artworkUrl100||"", n:a.trackCount, url:a.collectionViewUrl||"", genre:a.primaryGenreName||"" };
       });
-    });
+    }).catch(function(){ return [] });
 }
-function itAlbum(id){
-  return getJSON("https://itunes.apple.com/lookup?id="+encodeURIComponent(id)+"&entity=song&country=it").then(function(j){
+function itSearch(q){
+  return Promise.all([itStore(q,"it"),itStore(q,"us")]).then(function(r){
+    var visti={}, tutti=[];
+    r[0].concat(r[1]).forEach(function(a){
+      var k=chiave(a);
+      if(visti[k]) return; visti[k]=1; tutti.push(a);
+    });
+    return ordinaPertinenza(q,tutti).slice(0,25);
+  });
+}
+function itAlbum(id,st){
+  return getJSON("https://itunes.apple.com/lookup?id="+encodeURIComponent(id)+"&entity=song&country="+(st||"it")).then(function(j){
     var r=j.results||[], c=r.filter(function(x){ return x.wrapperType==="collection" })[0]||{};
     var tracks=r.filter(function(x){ return x.wrapperType==="track" && x.kind==="song" })
       .sort(function(a,b){ return (a.discNumber||1)-(b.discNumber||1) || (a.trackNumber||0)-(b.trackNumber||0) })
       .map(function(t){ return {n:t.trackNumber||0, disc:t.discNumber||1, name:t.trackName||"", ms:t.trackTimeMillis||0, prev:t.previewUrl||""} });
     return { artist:c.artistName||"", title:c.collectionName||"", year:(c.releaseDate||"").slice(0,4),
              cover:(c.artworkUrl100||"").replace("100x100bb","600x600bb"), url:c.collectionViewUrl||"",
-             genre:c.primaryGenreName||"", src:{p:"itunes",id:id}, tracks:tracks };
+             genre:c.primaryGenreName||"", src:{p:"itunes",id:id,st:st||"it"}, tracks:tracks };
   });
 }
 /* -- MusicBrainz: archivio libero; una richiesta al secondo per buona educazione -- */
@@ -786,11 +829,11 @@ function mbSearch(q){
     .then(function(j){
       return (j["release-groups"]||[]).map(function(g){
         return { p:"mb", id:g.id, artist:((g["artist-credit"]||[]).map(function(c){ return c.name+(c.joinphrase||"") }).join("")),
-                 title:g.title, year:(g["first-release-date"]||"").slice(0,4),
+                 title:g.title, year:(g["first-release-date"]||"").slice(0,4), tipo:(g["secondary-types"]||[]).join(" "),
                  cover:"https://coverartarchive.org/release-group/"+g.id+"/front-500",
                  thumb:"https://coverartarchive.org/release-group/"+g.id+"/front-250", n:null, url:"https://musicbrainz.org/release-group/"+g.id };
       });
-    });
+    }).then(function(l){ return ordinaPertinenza(q,l) });
 }
 function mbAlbum(g){
   // la prima pubblicazione ufficiale del gruppo, con i suoi brani
@@ -809,10 +852,58 @@ function mbAlbum(g){
       return { artist:g.artist, title:g.title, year:g.year, cover:g.cover, url:g.url, genre:"", src:{p:"mb",id:g.id}, tracks:x.tracks };
     });
 }
+/* -- Deezer: senza chiave, ma l'API non accetta chiamate dirette dal browser:
+      si passa per "jsonp", cioè un piccolo script che consegna la risposta -- */
+function jsonp(url){
+  return new Promise(function(res,rej){
+    var cb="dz"+Date.now().toString(36)+Math.floor(Math.random()*1e6), s=document.createElement("script"), fatto=false;
+    window[cb]=function(d){ fatto=true; delete window[cb]; s.remove(); if(d&&d.error) rej(new Error(d.error.message||"deezer")); else res(d) };
+    s.src=url+(url.indexOf("?")>-1?"&":"?")+"output=jsonp&callback="+cb;
+    s.onerror=function(){ delete window[cb]; s.remove(); rej(new Error("deezer")) };
+    document.head.appendChild(s);
+    setTimeout(function(){ if(!fatto){ delete window[cb]; s.remove(); rej(new Error("timeout")) } },9000);
+  });
+}
+function dzSearch(q){
+  return jsonp("https://api.deezer.com/search/album?q="+encodeURIComponent(q)+"&limit=25").then(function(j){
+    return (j.data||[]).map(function(a,i){
+      return { p:"deezer", id:a.id, rank:i, artist:(a.artist&&a.artist.name)||"", title:a.title, year:"",
+               cover:a.cover_xl||a.cover_big||"", thumb:a.cover_medium||a.cover||"", n:a.nb_tracks, tipo:a.record_type||"",
+               url:a.link||"", genre:"" };
+    });
+  }).catch(function(){ return [] });
+}
+function dzAlbum(a){
+  return Promise.all([jsonp("https://api.deezer.com/album/"+a.id), jsonp("https://api.deezer.com/album/"+a.id+"/tracks?limit=500")])
+    .then(function(r){
+      var al=r[0]||{}, tr=(r[1]&&r[1].data)||[];
+      return { artist:(al.artist&&al.artist.name)||a.artist, title:al.title||a.title, year:(al.release_date||"").slice(0,4),
+               cover:al.cover_xl||a.cover, url:al.link||a.url, genre:(al.genres&&al.genres.data&&al.genres.data[0]&&al.genres.data[0].name)||"",
+               src:{p:"deezer",id:a.id},
+               tracks:tr.map(function(x,i){ return {n:x.track_position||i+1, disc:x.disk_number||1, name:x.title||"", ms:(x.duration||0)*1000, prev:x.preview||""} }) };
+    });
+}
+function nomeFonte(p){ return p==="mb"?"MusicBrainz":p==="deezer"?"Deezer":"Apple Music" }
+/* ricerca combinata: Deezer, Apple Italia e Apple USA insieme, un solo
+   elenco senza doppioni e in ordine di pertinenza. Deezer per primo perché
+   ordina per popolarità vera; Apple completa dove Deezer non arriva.      */
+function cercaTutte(q){
+  return Promise.all([dzSearch(q),itStore(q,"it"),itStore(q,"us")]).then(function(r){
+    var visti={}, tutti=[];
+    r[0].concat(r[1],r[2]).forEach(function(a){
+      var k=chiave(a);
+      if(visti[k]) return; visti[k]=1; tutti.push(a);
+    });
+    return ordinaPertinenza(q,tutti).slice(0,30);
+  });
+}
 function hintFonte(){
-  return cfg.prov==="mb"
-    ? "MusicBrainz è l'archivio libero: copre anche edizioni rare, ma senza anteprime audio."
-    : "Apple Music: scalette, copertine e anteprime di 30 secondi. Se un album manca, prova MusicBrainz.";
+  return {
+    tutte:"Apple Music e Deezer insieme, con MusicBrainz in coda se serve. Scalette, copertine e anteprime di 30 secondi.",
+    itunes:"Apple Music (negozio italiano e americano): scalette, copertine e anteprime.",
+    deezer:"Deezer: catalogo molto ampio, scalette, copertine e anteprime.",
+    mb:"MusicBrainz è l'archivio libero: copre anche edizioni rare, ma senza anteprime audio."
+  }[cfg.prov]||"";
 }
 function cerca(){
   var q=document.getElementById("sq").value.trim(), res=document.getElementById("res"), hint=document.getElementById("hintProv");
@@ -820,14 +911,22 @@ function cerca(){
   if(q.length<2){ res.innerHTML=""; return }
   var mio=++cerca._n;
   res.innerHTML='<div class="empty">Cerco…</div>';
-  (cfg.prov==="mb"?mbSearch(q):itSearch(q)).then(function(lista){
+  var fonte={mb:mbSearch, itunes:itSearch, deezer:function(x){ return dzSearch(x).then(function(l){ return ordinaPertinenza(x,l) }) }}[cfg.prov]||cercaTutte;
+  fonte(q).then(function(lista){
+    // Apple non ha tutto: se nessun risultato è davvero convincente, si
+    // aggiungono in coda quelli di MusicBrainz, senza dover cambiare fonte
+    var migliore=lista.length?lista[0]._p:0;
+    if(cfg.prov!=="mb" && migliore<9) return mbSearch(q).then(function(l2){
+      return lista.concat(l2.filter(function(a){ return a._p>=6 }).slice(0,8)); }).catch(function(){ return lista });
+    return lista;
+  }).then(function(lista){
     if(mio!==cerca._n) return;
     cerca._ultimi=lista;
     if(!lista.length){ res.innerHTML='<div class="empty">Nessun risultato'+(cfg.prov==="mb"?"":" — prova con MusicBrainz")+'</div>'; return }
     res.innerHTML=lista.map(function(a,i){
       return '<button class="ri" data-r="'+i+'"><img src="'+esc(a.thumb)+'" alt="" loading="lazy" onerror="this.style.visibility=\'hidden\'">'+
         '<span style="flex:1;min-width:0"><span class="n">'+esc(a.title)+'</span>'+
-        '<span class="src '+a.p+'">'+(a.p==="mb"?"MusicBrainz":"Apple Music")+'</span><br>'+
+        '<span class="src '+a.p+'">'+nomeFonte(a.p)+'</span><br>'+
         '<span class="s">'+esc(a.artist)+(a.year?" · "+esc(a.year):"")+(a.n?" · "+a.n+" brani":"")+'</span></span></button>';
     }).join("");
   }).catch(function(){ if(mio===cerca._n) res.innerHTML='<div class="empty">Fonte non raggiungibile</div>' });
@@ -838,7 +937,7 @@ document.getElementById("res").addEventListener("click",function(e){
   var b=e.target.closest("[data-r]"); if(!b) return;
   var a=cerca._ultimi[Number(b.dataset.r)]; if(!a) return;
   b.querySelector(".n").textContent="Scarico la scaletta…";
-  (a.p==="mb"?mbAlbum(a):itAlbum(a.id)).then(function(o){
+  (a.p==="mb"?mbAlbum(a):a.p==="deezer"?dzAlbum(a):itAlbum(a.id,a.st)).then(function(o){
     if(!o.title) o.title=a.title; if(!o.artist) o.artist=a.artist; if(!o.year) o.year=a.year; if(!o.cover) o.cover=a.cover;
     addShow(o);
   }).catch(function(){ toast("Non riesco a scaricare la scaletta"); addShow({artist:a.artist,title:a.title,year:a.year,cover:a.cover,url:a.url,src:{p:a.p,id:a.id},tracks:[]}) });
@@ -1093,7 +1192,7 @@ document.addEventListener("change",function(e){
 document.getElementById("fvoto").addEventListener("change",render);
 document.addEventListener("keydown",function(e){ if(e.key==="Escape"){ ovAdd.classList.remove("on"); ovAcc.classList.remove("on") } });
 loadCfg();
-document.getElementById("prov").value=cfg.prov||"itunes";
+document.getElementById("prov").value=cfg.prov||"tutte";
 loadSess();
 try{ var tsalv=localStorage.getItem(KEY+":tab"); if(COLS.indexOf(tsalv)>-1) tabAttiva=tsalv }catch(e){}
 try{
