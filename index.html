@@ -320,7 +320,7 @@
   <a href="https://musicbrainz.org/" target="_blank" rel="noopener" style="color:#7d6f8a">MusicBrainz</a> /
   <a href="https://coverartarchive.org/" target="_blank" rel="noopener" style="color:#7d6f8a">Cover Art Archive</a>.<br>
   Segnalazioni e suggerimenti: <span class="posta"></span>
-  · <span title="Serve a capire se un dispositivo sta usando una versione vecchia">versione del 9 novembre 2026</span>
+  · <span title="Serve a capire se un dispositivo sta usando una versione vecchia">versione del 9 novembre 2026 · b</span>
 </footer>
 
 <div class="ov" id="ovAdd">
@@ -470,7 +470,7 @@ function migrate(s){
     cover:s.cover||"", url:s.url||"", genre:s.genre||"",
     src:(s.src&&s.src.id&&(s.src.p==="itunes"||s.src.p==="mb"||s.src.p==="deezer"))?{p:s.src.p,id:s.src.id,st:s.src.st||"it"}:null,
     tracks:Array.isArray(s.tracks)?s.tracks.map(function(t,i){
-      return {n:Number(t.n)||i+1, disc:Number(t.disc)||1, name:String(t.name||""), ms:Number(t.ms)||0, prev:t.prev||""} }):[],
+      return {n:Number(t.n)||i+1, disc:Number(t.disc)||1, name:String(t.name||""), ms:Number(t.ms)||0, prev:t.prev||"", dz:t.dz||0} }):[],
     tr:(s.tr&&typeof s.tr==="object")?s.tr:{},
     rating:parseInt(s.rating,10)||0, done:!!s.done,
     note:s.note||"", added:s.added||Date.now(), updated:s.updated||Date.now(),
@@ -613,7 +613,7 @@ function tracksHtml(s){
   var h='<div class="trk">', disco=0, dischi=s.tracks.some(function(t){ return (t.disc||1)>1 });
   s.tracks.forEach(function(t,k){
     if(dischi && (t.disc||1)!==disco){ disco=t.disc||1; h+='<div class="disc">Disco '+disco+'</div>' }
-    var ha=t.prev && t.prev!=="-", suona=ha && player.src===t.prev && !player.paused;
+    var ha=t.prev && t.prev!=="-", suona=ha && player.dataset.k===s.id+"/"+k && !player.paused;
     h+='<div class="trow">'+
       '<button class="play'+(suona?" on":"")+(ha?"":" dim")+'" data-a="play" data-i="'+s.id+'" data-k="'+k+'" '+(t.prev==="-"?'disabled':'')+
         ' title="'+(ha?"Anteprima di 30 secondi":t.prev==="-"?"Anteprima non trovata":"Cerca l\'anteprima")+'">'+(suona?"■":"▶")+'</button>'+
@@ -671,7 +671,7 @@ var player=document.getElementById("player");
 function aggiornaPlayUI(){
   document.querySelectorAll(".play").forEach(function(b){
     var s=find(b.dataset.i), t=s&&s.tracks[Number(b.dataset.k)];
-    var on=!!(t && t.prev && player.src===t.prev && !player.paused);
+    var on=!!(t && t.prev && t.prev!=="-" && player.dataset.k===b.dataset.i+"/"+b.dataset.k && !player.paused);
     b.classList.toggle("on",on); b.textContent=on?"■":"▶";
   });
 }
@@ -690,16 +690,26 @@ function trovaAnteprima(s,t){
   function scegli(lista,get){
     var ok=lista.map(get).filter(function(x){ return x.prev });
     var esatta=ok.filter(function(x){ return norm(x.title)===nt })[0];
-    return (esatta||ok[0]||{}).prev||"";
+    return esatta||ok[0]||null;
   }
   return jsonp("https://api.deezer.com/search/track?q="+encodeURIComponent(q)+"&limit=5")
-    .then(function(d){ return scegli(d.data||[],function(x){ return {title:x.title,prev:x.preview} }) }).catch(function(){ return "" })
-    .then(function(u){ if(u) return u;
+    .then(function(d){ return scegli(d.data||[],function(x){ return {title:x.title,prev:x.preview,dz:x.id} }) }).catch(function(){ return null })
+    .then(function(r){ if(r) return r;
       return getJSON("https://itunes.apple.com/search?term="+encodeURIComponent(q)+"&entity=song&country=it&limit=5")
-        .then(function(j){ return scegli(j.results||[],function(x){ return {title:x.trackName,prev:x.previewUrl} }) }).catch(function(){ return "" }) })
-    .then(function(u){ if(u) return u;
+        .then(function(j){ return scegli(j.results||[],function(x){ return {title:x.trackName,prev:x.previewUrl} }) }).catch(function(){ return null }) })
+    .then(function(r){ if(r) return r;
       return getJSON("https://itunes.apple.com/search?term="+encodeURIComponent(q)+"&entity=song&country=us&limit=5")
-        .then(function(j){ return scegli(j.results||[],function(x){ return {title:x.trackName,prev:x.previewUrl} }) }).catch(function(){ return "" }) });
+        .then(function(j){ return scegli(j.results||[],function(x){ return {title:x.trackName,prev:x.previewUrl} }) }).catch(function(){ return null }) })
+    .then(function(r){ if(r){ t.prev=r.prev; t.dz=r.dz||0 } return r?r.prev:"" });
+}
+/* I link di Deezer scadono dopo un giorno (c'è "exp=" nell'indirizzo):
+   per i suoi brani si tiene l'identificativo e si chiede un link fresco
+   a ogni riproduzione. Quelli Apple sono stabili e si usano così come sono. */
+function urlAnteprima(s,t){
+  if(t.prev && t.prev!=="-" && !/dzcdn\.net/.test(t.prev)) return Promise.resolve(t.prev);
+  var fresco = t.dz ? jsonp("https://api.deezer.com/track/"+t.dz).then(function(x){ return (x&&x.preview)||"" }).catch(function(){ return "" })
+                    : Promise.resolve("");
+  return fresco.then(function(u){ return u || trovaAnteprima(s,t) });
 }
 /* all'apertura della scaletta (e appena aggiunto un album) si completano in
    sottofondo, un brano alla volta, salvando alla fine */
@@ -712,7 +722,7 @@ function completaAnteprime(s){
   function prossimo(){
     if(i>=mancanti.length || db.shows.indexOf(s)<0){ tocca(s,false); render(); return }
     var t=mancanti[i++];
-    trovaAnteprima(s,t).then(function(u){ t.prev=u||"-"; if(u) trovate++; if(i%4===0) render(); setTimeout(prossimo,150) });
+    trovaAnteprima(s,t).then(function(u){ if(!u) t.prev="-"; else trovate++; if(i%4===0) render(); setTimeout(prossimo,150) });
   }
   prossimo();
 }
@@ -734,18 +744,17 @@ document.addEventListener("click",function(ev){
   if(a==="done"){ s.done=true; tocca(s,true); render(); return }
   if(a==="undone"){ s.done=false; tocca(s,true); render(); return }
   if(a==="play"){
-    var t=s.tracks[Number(b.dataset.k)]; if(!t||t.prev==="-") return;
-    if(!t.prev){                                   // non ancora cercata: la si cerca adesso, poi parte
-      b.textContent="…";
-      trovaAnteprima(s,t).then(function(u){
-        t.prev=u||"-"; tocca(s,false);
-        if(u){ player.src=u; player.play().catch(function(){}) } else toast("Anteprima non trovata");
-        render();
-      });
-      return;
-    }
-    if(player.src===t.prev && !player.paused){ player.pause(); return }
-    player.src=t.prev; player.play().catch(function(){});
+    var k=Number(b.dataset.k), t=s.tracks[k]; if(!t||t.prev==="-") return;
+    var chiaveBrano=s.id+"/"+k;
+    if(player.dataset.k===chiaveBrano && !player.paused){ player.pause(); return }
+    b.textContent="…";
+    var eraVuota=!t.prev;
+    urlAnteprima(s,t).then(function(u){
+      if(!u){ t.prev="-"; tocca(s,false); toast("Anteprima non trovata"); render(); return }
+      if(eraVuota) tocca(s,false);
+      player.dataset.k=chiaveBrano; player.src=u; player.play().catch(function(){});
+      render();
+    });
     return;
   }
 });
@@ -927,7 +936,7 @@ function dzAlbum(a){
       return { artist:(al.artist&&al.artist.name)||a.artist, title:al.title||a.title, year:(al.release_date||"").slice(0,4),
                cover:al.cover_xl||a.cover, url:al.link||a.url, genre:(al.genres&&al.genres.data&&al.genres.data[0]&&al.genres.data[0].name)||"",
                src:{p:"deezer",id:a.id},
-               tracks:tr.map(function(x,i){ return {n:x.track_position||i+1, disc:x.disk_number||1, name:x.title||"", ms:(x.duration||0)*1000, prev:x.preview||""} }) };
+               tracks:tr.map(function(x,i){ return {n:x.track_position||i+1, disc:x.disk_number||1, name:x.title||"", ms:(x.duration||0)*1000, prev:x.preview||"", dz:x.id||0} }) };
     });
 }
 function nomeFonte(p){ return p==="mb"?"MusicBrainz":p==="deezer"?"Deezer":"Apple Music" }
