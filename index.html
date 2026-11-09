@@ -185,6 +185,7 @@
   .play:hover{border-color:var(--acc); color:var(--acc)}
   .play.on{background:var(--acc); border-color:var(--acc); color:#07210f}
   .play:disabled{opacity:.25; cursor:default}
+  .play.dim{opacity:.55; border-style:dashed}
   .disc{color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.4px; padding:6px 3px 2px}
   .nostruct{color:var(--dim); font-size:12.3px; padding:4px 2px}
 
@@ -319,7 +320,7 @@
   <a href="https://musicbrainz.org/" target="_blank" rel="noopener" style="color:#7d6f8a">MusicBrainz</a> /
   <a href="https://coverartarchive.org/" target="_blank" rel="noopener" style="color:#7d6f8a">Cover Art Archive</a>.<br>
   Segnalazioni e suggerimenti: <span class="posta"></span>
-  · <span title="Serve a capire se un dispositivo sta usando una versione vecchia">versione del 6 novembre 2026 · f</span>
+  · <span title="Serve a capire se un dispositivo sta usando una versione vecchia">versione del 9 novembre 2026</span>
 </footer>
 
 <div class="ov" id="ovAdd">
@@ -612,10 +613,10 @@ function tracksHtml(s){
   var h='<div class="trk">', disco=0, dischi=s.tracks.some(function(t){ return (t.disc||1)>1 });
   s.tracks.forEach(function(t,k){
     if(dischi && (t.disc||1)!==disco){ disco=t.disc||1; h+='<div class="disc">Disco '+disco+'</div>' }
-    var suona=player.src===t.prev && !player.paused && t.prev;
+    var ha=t.prev && t.prev!=="-", suona=ha && player.src===t.prev && !player.paused;
     h+='<div class="trow">'+
-      '<button class="play'+(suona?" on":"")+'" data-a="play" data-i="'+s.id+'" data-k="'+k+'" '+(t.prev?'':'disabled')+
-        ' title="'+(t.prev?"Anteprima di 30 secondi":"Anteprima non disponibile")+'">'+(suona?"■":"▶")+'</button>'+
+      '<button class="play'+(suona?" on":"")+(ha?"":" dim")+'" data-a="play" data-i="'+s.id+'" data-k="'+k+'" '+(t.prev==="-"?'disabled':'')+
+        ' title="'+(ha?"Anteprima di 30 secondi":t.prev==="-"?"Anteprima non trovata":"Cerca l\'anteprima")+'">'+(suona?"■":"▶")+'</button>'+
       '<span class="tn">'+t.n+'</span><span class="tt">'+esc(t.name)+'</span>'+
       '<span class="td">'+durata(t.ms)+'</span>'+trackRateHtml(s,k)+'</div>';
   });
@@ -679,11 +680,48 @@ player.addEventListener("pause",aggiornaPlayUI);
 player.addEventListener("play",aggiornaPlayUI);
 player.addEventListener("error",function(){ toast("Anteprima non disponibile"); aggiornaPlayUI() });
 
+/* Anteprime mancanti: un brano può non averla nella fonte da cui hai preso
+   l'album (MusicBrainz non ne ha mai, Apple e Deezer a volte) ma averla
+   nell'altra. Si cerca "artista titolo" su Deezer e poi su Apple (Italia,
+   USA), preferendo il risultato con titolo identico, così da scartare le
+   versioni dal vivo. "-" significa: cercata e non trovata, non riprovare. */
+function trovaAnteprima(s,t){
+  var q=s.artist+" "+t.name, nt=norm(t.name);
+  function scegli(lista,get){
+    var ok=lista.map(get).filter(function(x){ return x.prev });
+    var esatta=ok.filter(function(x){ return norm(x.title)===nt })[0];
+    return (esatta||ok[0]||{}).prev||"";
+  }
+  return jsonp("https://api.deezer.com/search/track?q="+encodeURIComponent(q)+"&limit=5")
+    .then(function(d){ return scegli(d.data||[],function(x){ return {title:x.title,prev:x.preview} }) }).catch(function(){ return "" })
+    .then(function(u){ if(u) return u;
+      return getJSON("https://itunes.apple.com/search?term="+encodeURIComponent(q)+"&entity=song&country=it&limit=5")
+        .then(function(j){ return scegli(j.results||[],function(x){ return {title:x.trackName,prev:x.previewUrl} }) }).catch(function(){ return "" }) })
+    .then(function(u){ if(u) return u;
+      return getJSON("https://itunes.apple.com/search?term="+encodeURIComponent(q)+"&entity=song&country=us&limit=5")
+        .then(function(j){ return scegli(j.results||[],function(x){ return {title:x.trackName,prev:x.previewUrl} }) }).catch(function(){ return "" }) });
+}
+/* all'apertura della scaletta (e appena aggiunto un album) si completano in
+   sottofondo, un brano alla volta, salvando alla fine */
+function completaAnteprime(s){
+  if(s._compl) return;
+  var mancanti=s.tracks.filter(function(t){ return !t.prev });
+  if(!mancanti.length) return;
+  s._compl=true;
+  var i=0, trovate=0;
+  function prossimo(){
+    if(i>=mancanti.length || db.shows.indexOf(s)<0){ tocca(s,false); render(); return }
+    var t=mancanti[i++];
+    trovaAnteprima(s,t).then(function(u){ t.prev=u||"-"; if(u) trovate++; if(i%4===0) render(); setTimeout(prossimo,150) });
+  }
+  prossimo();
+}
+
 /* ---- azioni sulla scheda ---- */
 document.addEventListener("click",function(ev){
   var b=ev.target.closest("[data-a]"); if(!b) return;
   var a=b.dataset.a, s=find(b.dataset.i); if(!s) return;
-  if(a==="open"){ s.open=!s.open; render(); return }
+  if(a==="open"){ s.open=!s.open; render(); if(s.open) completaAnteprime(s); return }
   if(a==="edit"){ s.openDet=!s.openDet; render(); return }
   if(a==="del"){ removeShow(s); return }
   if(a==="rate"){ var v=Number(b.dataset.v); s.rating=(s.rating===v)?0:v; tocca(s,true); render(); return }
@@ -696,7 +734,16 @@ document.addEventListener("click",function(ev){
   if(a==="done"){ s.done=true; tocca(s,true); render(); return }
   if(a==="undone"){ s.done=false; tocca(s,true); render(); return }
   if(a==="play"){
-    var t=s.tracks[Number(b.dataset.k)]; if(!t||!t.prev) return;
+    var t=s.tracks[Number(b.dataset.k)]; if(!t||t.prev==="-") return;
+    if(!t.prev){                                   // non ancora cercata: la si cerca adesso, poi parte
+      b.textContent="…";
+      trovaAnteprima(s,t).then(function(u){
+        t.prev=u||"-"; tocca(s,false);
+        if(u){ player.src=u; player.play().catch(function(){}) } else toast("Anteprima non trovata");
+        render();
+      });
+      return;
+    }
     if(player.src===t.prev && !player.paused){ player.pause(); return }
     player.src=t.prev; player.play().catch(function(){});
     return;
@@ -952,6 +999,7 @@ function addShow(o){
   ovAdd.classList.remove("on");
   render();
   toast("«"+s.title+"» aggiunto a Da ascoltare"+(s.tracks.length?" · "+s.tracks.length+" brani":""));
+  completaAnteprime(s);
 }
 
 /* ============ backup ============ */
